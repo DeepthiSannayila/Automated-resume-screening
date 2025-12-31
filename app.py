@@ -10,6 +10,7 @@ from nlp_engine.extractor import extract_skills, extract_experience
 from matcher.role_req import ROLE_REQUIREMENTS
 from matcher.matcher import calculate_match
 
+
 st.set_page_config("Automated Resume Screening System", layout="wide")
 st.title("🎯 Automated Resume Screening System")
 
