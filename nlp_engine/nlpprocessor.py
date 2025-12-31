@@ -1,6 +1,8 @@
 import spacy
+from spacy.cli import download
 
-nlp = spacy.load("en_core_web_sm")
-
-def process_text(text):
-    return nlp(text)
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
