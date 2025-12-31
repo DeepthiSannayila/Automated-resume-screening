@@ -1,0 +1,7 @@
+streamlit
+python-dotenv
+spacy
+pdfplumber
+python-docx
+scikit-learn
+numpy
