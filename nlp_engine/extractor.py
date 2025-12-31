@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
-from nlp_engine.nlpprocessor import nlp
+from .nlpprocessor import nlp
+
 
 SKILLS_DB = {
     "python", "java", "sql", "mysql", "postgresql", "mongodb",
