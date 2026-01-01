@@ -1,5 +1,6 @@
 streamlit
 spacy==3.7.2
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 numpy==1.26.2
 pandas==2.1.4
 scikit-learn
@@ -7,4 +8,4 @@ python-docx==1.2.0
 imaplib2
 email-validator
 pdfplumber==0.11.6
-en-core-web-sm==3.7.1 --no-deps
+
