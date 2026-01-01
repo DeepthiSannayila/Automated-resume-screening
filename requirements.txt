@@ -1,9 +1,9 @@
 streamlit
 spacy==3.7.2
-numpy
-pandas
-scikit-learn
-python-docx
+numpy==1.26.2
+pandas==2.1.4
+scikit-learn==1.7.0
+python-docx==1.2.0
 imaplib2
 email-validator
-pdfplumber
+pdfplumber==0.11.6
