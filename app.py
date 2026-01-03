@@ -129,7 +129,7 @@ with st.sidebar:
         "Application Date",
         ["All", "Last 7 Days", "Last 30 Days", "Last 90 Days"]
     )
-    max_apps = st.slider("Applications", 100, 10000, 2000)
+    max_apps = st.slider("Applications", 100, 5000, 2000)
     threshold = st.slider("ATS Threshold", 1, 100, 70)
     start_btn = st.button("🚀 Fetch & Process")
 
