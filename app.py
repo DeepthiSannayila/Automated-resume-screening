@@ -1,188 +1,191 @@
-import streamlit as st
 import os
-from uuid import uuid4
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+import json
+import streamlit as st
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from email_listener.gmail import fetch_resumes_from_mail
 from resume_parser.filereader import extract_text
-from resume_parser.textcleaner import clean_text
-from nlp_engine.extractor import extract_skills, extract_experience
-from matcher.role_req import ROLE_REQUIREMENTS
-from matcher.matcher import calculate_match
+from config.settings import SUPPORTED_FILES
 
+# ================= CONFIG =================
+MAX_WORKERS = max(4, (os.cpu_count() or 4) - 1)
+CACHE_DIR = ".cache"
+MAX_TEXT_CHARS = 12000
+MAX_FILE_SIZE_MB = 3
 
-st.set_page_config("Automated Resume Screening System", layout="wide")
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+# ================= ROLE → SKILLS =================
+ROLE_SKILLS = {
+    "Python Developer": ["python", "django", "flask", "fastapi", "sql", "git"],
+    "Java Developer": ["java", "spring", "hibernate", "sql"],
+    "Frontend Developer": ["html", "css", "javascript", "react"],
+    "Data Analyst": ["sql", "excel", "power bi", "python"],
+    "DevOps Engineer": ["docker", "kubernetes", "aws", "linux"],
+    "AI Engineer": ["python", "machine learning", "tensorflow", "pytorch"],
+    "Full Stack Developer": ["html", "css", "javascript", "react", "node", "sql"]
+}
+
+# ================= LOCATIONS =================
+LOCATIONS = {
+    "Any": [],
+    "Hyderabad": ["hyderabad", "hyd"],
+    "Bangalore": ["bangalore", "bengaluru"],
+    "Chennai": ["chennai"],
+    "Pune": ["pune"],
+    "Delhi": ["delhi"],
+    "India": ["india"]
+}
+
+# ================= DATE FILTER =================
+def is_within_date_range(file_path, date_filter):
+    if date_filter == "All":
+        return True
+
+    modified_time = os.path.getmtime(file_path)
+    now = time.time()
+
+    if date_filter == "Last 7 Days":
+        return (now - modified_time) <= 7 * 24 * 60 * 60
+    if date_filter == "Last 30 Days":
+        return (now - modified_time) <= 30 * 24 * 60 * 60
+    if date_filter == "Last 90 Days":
+        return (now - modified_time) <= 90 * 24 * 60 * 60
+
+    return True
+
+# ================= MATCH LOGIC =================
+def skill_match(text, skills):
+    text = text.lower()
+    found = [s for s in skills if s in text]
+    missing = [s for s in skills if s not in text]
+    score = int((len(found) / len(skills)) * 100)
+    return score, found, missing
+
+def location_match(text, location):
+    if location == "Any":
+        return True
+    text = text.lower()
+    return any(k in text for k in LOCATIONS[location])
+
+# ================= PROCESS ONE RESUME =================
+def process_resume(file_path, skills, threshold, location, role):
+    name = os.path.basename(file_path)
+    cache_key = f"{name}_{role}_{location}_{threshold}.json"
+    cache_path = os.path.join(CACHE_DIR, cache_key)
+
+    if os.path.exists(cache_path):
+        with open(cache_path) as f:
+            return json.load(f)
+
+    if os.path.getsize(file_path) > MAX_FILE_SIZE_MB * 1024 * 1024:
+        return {"file": name, "status": "Rejected", "reason": "File too large"}
+
+    try:
+        text = extract_text(file_path)[:MAX_TEXT_CHARS]
+
+        if not text or len(text) < 200:
+            result = {"file": name, "status": "Rejected", "reason": "Unreadable resume"}
+
+        elif not location_match(text, location):
+            result = {"file": name, "status": "Rejected", "reason": "Location mismatch"}
+
+        else:
+            score, found, missing = skill_match(text, skills)
+
+            if score < threshold:
+                result = {
+                    "file": name,
+                    "status": "Rejected",
+                    "score": score,
+                    "reason": "ATS below threshold",
+                    "missing_skills": ", ".join(missing)
+                }
+            else:
+                result = {
+                    "file": name,
+                    "status": "Shortlisted",
+                    "score": score,
+                    "skills_found": ", ".join(found)
+                }
+
+        with open(cache_path, "w") as f:
+            json.dump(result, f)
+
+        return result
+
+    except Exception as e:
+        return {"file": name, "status": "Rejected", "reason": str(e)}
+
+# ================= STREAMLIT UI =================
+st.set_page_config(layout="wide")
 st.title("🎯 Automated Resume Screening System")
 
 with st.sidebar:
     st.subheader("Filters")
-    designation = st.selectbox("Select Designation", list(ROLE_REQUIREMENTS.keys()))
-    max_apps = st.slider("Number of Applications", 1, 5000, 10)
-    ats_threshold = st.slider("ATS Threshold", 0, 100, 70)
-    process_btn = st.button("Fetch & Process Applications")
+    role = st.selectbox("Designation", list(ROLE_SKILLS.keys()))
+    location = st.selectbox("Location", list(LOCATIONS.keys()))
+    date_filter = st.selectbox(
+        "Application Date",
+        ["All", "Last 7 Days", "Last 30 Days", "Last 90 Days"]
+    )
+    max_apps = st.slider("Applications", 100, 10000, 2000)
+    threshold = st.slider("ATS Threshold", 1, 100, 70)
+    start_btn = st.button("🚀 Fetch & Process")
 
-MAX_WORKERS = min(4, os.cpu_count() or 2)
+# ================= MAIN =================
+if start_btn:
+    resumes = [
+        os.path.join("resumes", f)
+        for f in os.listdir("resumes")
+        if f.lower().endswith(SUPPORTED_FILES)
+        and is_within_date_range(os.path.join("resumes", f), date_filter)
+    ][:max_apps]
 
-def fast_skill_filter(text, required_skills):
-    text = text.lower()
-    return any(skill.lower() in text for skill in required_skills)
+    if not resumes:
+        st.warning("No resumes found for selected filters")
+        st.stop()
 
-def process_resume(file_path, required_skills, min_exp, ats_threshold):
-    try:
-        raw_text = extract_text(file_path)
-        text = clean_text(raw_text[:8000])
+    skills = ROLE_SKILLS[role]
+    start_time = time.time()
 
-        skills = extract_skills(text)
-        experience, explanation = extract_experience(text)
-        exp_years = experience if isinstance(experience, int) else 0
-
-        score, missing = calculate_match(
-            skills, required_skills, exp_years, min_exp
-        )
-
-        reasons = []
-        if score < ats_threshold:
-            reasons.append("ATS score below threshold")
-        if exp_years < min_exp:
-            reasons.append("Low experience")
-        if missing:
-            reasons.append("Missing skills")
-
-        return {
-            "file": os.path.basename(file_path),
-            "path": file_path,
-            "score": score,
-            "status": "Shortlisted" if not reasons else "Rejected",
-            "experience": experience,
-            "skills": skills,
-            "missing": missing,
-            "reasons": reasons,
-            "exp_explanation": explanation
-        }
-
-    except Exception as e:
-        return {
-            "file": os.path.basename(file_path),
-            "path": None,
-            "score": 0,
-            "status": "Rejected",
-            "experience": "Not processed",
-            "skills": [],
-            "missing": [],
-            "reasons": [str(e)],
-            "exp_explanation": "Error while processing resume"
-        }
-
-if process_btn:
-    st.info("⏳ Fetching resumes...")
-
-    os.makedirs("resumes", exist_ok=True)
-
-    emails_checked, resume_files = fetch_resumes_from_mail(max_apps)
-
-    required_skills = ROLE_REQUIREMENTS[designation]["skills"]
-    min_exp = ROLE_REQUIREMENTS[designation]["min_experience"]
-
-    stage1_pass = []
-    early_rejected = []
-
-    for file_path in resume_files:
-        try:
-            raw_text = extract_text(file_path)
-            text = clean_text(raw_text[:4000])
-
-            if fast_skill_filter(text, required_skills):
-                stage1_pass.append(file_path)
-            else:
-                early_rejected.append({
-                    "file": os.path.basename(file_path),
-                    "path": file_path,
-                    "score": 0,
-                    "status": "Rejected",
-                    "experience": "Not processed",
-                    "skills": [],
-                    "missing": required_skills,
-                    "reasons": ["Missing required skills"],
-                    "exp_explanation": "Rejected in fast skill filter"
-                })
-
-        except Exception:
-            early_rejected.append({
-                "file": os.path.basename(file_path),
-                "path": None,
-                "score": 0,
-                "status": "Rejected",
-                "experience": "Not processed",
-                "skills": [],
-                "missing": [],
-                "reasons": ["File read error"],
-                "exp_explanation": "Error during fast filtering"
-            })
-
-    processed = []
     progress = st.progress(0)
     status_text = st.empty()
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    shortlisted, rejected = [], []
+
+    with ProcessPoolExecutor(MAX_WORKERS) as executor:
         futures = [
-            executor.submit(
-                process_resume,
-                path,
-                required_skills,
-                min_exp,
-                ats_threshold
-            )
-            for path in stage1_pass
+            executor.submit(process_resume, f, skills, threshold, location, role)
+            for f in resumes
         ]
 
-        for i, future in enumerate(as_completed(futures)):
-            processed.append(future.result())
-            progress.progress((i + 1) / max(1, len(stage1_pass)))
-            status_text.text(
-                f"Processing {i + 1} / {len(stage1_pass)} shortlisted resumes..."
-            )
+        for i, future in enumerate(as_completed(futures), 1):
+            res = future.result()
+            if res["status"] == "Shortlisted":
+                shortlisted.append(res)
+            else:
+                rejected.append(res)
 
-    progress.empty()
-    status_text.empty()
+            progress.progress(i / len(resumes))
+            status_text.text(f"Processing {i}/{len(resumes)} resumes")
 
-    processed.extend(early_rejected)
+    elapsed = (time.time() - start_time) / 60
 
-    shortlisted = [p for p in processed if p["status"] == "Shortlisted"]
-    rejected = [p for p in processed if p["status"] == "Rejected"]
+    # ================= METRICS =================
+    st.success(f"✅ Completed in {elapsed:.2f} minutes")
 
-    st.subheader("📊 Summary")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Processed", len(processed))
+    c1.metric("Processed", len(resumes))
     c2.metric("Shortlisted", len(shortlisted))
     c3.metric("Rejected", len(rejected))
 
+    # ================= RESULTS =================
     st.subheader("✅ Shortlisted Candidates")
-    for p in shortlisted:
-        with st.expander(f"{p['file']} | Score: {p['score']}"):
-            st.write("**Experience:**", p["experience"])
-            st.write("**Skills:**", ", ".join(p["skills"]) or "—")
-            st.write("**Explanation:**", p["exp_explanation"])
-            if p["path"]:
-                with open(p["path"], "rb") as f:
-                    st.download_button(
-                        "📄 Download Resume",
-                        f,
-                        file_name=p["file"],
-                        key=str(uuid4())
-                    )
+    if shortlisted:
+        st.dataframe(shortlisted, use_container_width=True)
+    else:
+        st.info("No shortlisted candidates")
 
-    st.subheader("❌ Rejected Candidates")
-    for p in rejected:
-        with st.expander(f"{p['file']} | Score: {p['score']}"):
-            st.write("**Rejection Reasons:**", ", ".join(p["reasons"]))
-            st.write("**Skills Found:**", ", ".join(p["skills"]) or "—")
-            st.write("**Missing Skills:**", ", ".join(p["missing"]) or "—")
-            st.write("**Experience Explanation:**", p["exp_explanation"])
-            if p["path"]:
-                with open(p["path"], "rb") as f:
-                    st.download_button(
-                        "📄 Download Resume",
-                        f,
-                        file_name=p["file"],
-                        key=str(uuid4())
-                    )
+    st.subheader("❌ Rejected Candidates (with reasons)")
+    st.dataframe(rejected, use_container_width=True)
