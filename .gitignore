@@ -1,16 +1,5 @@
-# Python cache
 __pycache__/
-*.pyc
-
-# Environment variables
+.cache/
 .env
-
-# Downloaded resumes
-resumes/
-
-# Database files
+.streamlit/secrets.toml
 *.db
-
-# OS files
-.DS_Store
-Thumbs.db
