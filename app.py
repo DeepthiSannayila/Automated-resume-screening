@@ -8,7 +8,7 @@ from resume_parser.filereader import extract_text
 from config.settings import SUPPORTED_FILES
 
 # ================= CONFIG =================
-MAX_WORKERS = max(4, (os.cpu_count() or 4) - 1)
+MAX_WORKERS = max(12, (os.cpu_count() or 4) - 1)
 CACHE_DIR = ".cache"
 MAX_TEXT_CHARS = 12000
 MAX_FILE_SIZE_MB = 3
