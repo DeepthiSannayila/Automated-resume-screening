@@ -7,7 +7,6 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from resume_parser.filereader import extract_text
 from config.settings import SUPPORTED_FILES
 
-# ================= CONFIG =================
 MAX_WORKERS = max(4, (os.cpu_count() or 4) - 1)
 CACHE_DIR = ".cache"
 MAX_TEXT_CHARS = 12000
@@ -15,7 +14,7 @@ MAX_FILE_SIZE_MB = 3
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# ================= ROLE → SKILLS =================
+
 ROLE_SKILLS = {
     "Python Developer": ["python", "django", "flask", "fastapi", "sql", "git"],
     "Java Developer": ["java", "spring", "hibernate", "sql"],
@@ -23,10 +22,11 @@ ROLE_SKILLS = {
     "Data Analyst": ["sql", "excel", "power bi", "python"],
     "DevOps Engineer": ["docker", "kubernetes", "aws", "linux"],
     "AI Engineer": ["python", "machine learning", "tensorflow", "pytorch"],
-    "Full Stack Developer": ["html", "css", "javascript", "react", "node", "sql"]
+    "Full Stack Developer": ["html", "css", "javascript", "react", "node", "sql"],
+    "HR Executive": ["Screening", "Onboarding", "Document Verification", "Email Management", "Scheduling Meetings", "Coordination", "MIS preparation", "records", "communication", "MS Office"]
 }
 
-# ================= LOCATIONS =================
+
 LOCATIONS = {
     "Any": [],
     "Hyderabad": ["hyderabad", "hyd"],
@@ -37,7 +37,6 @@ LOCATIONS = {
     "India": ["india"]
 }
 
-# ================= DATE FILTER =================
 def is_within_date_range(file_path, date_filter):
     if date_filter == "All":
         return True
@@ -54,7 +53,6 @@ def is_within_date_range(file_path, date_filter):
 
     return True
 
-# ================= MATCH LOGIC =================
 def skill_match(text, skills):
     text = text.lower()
     found = [s for s in skills if s in text]
@@ -68,7 +66,6 @@ def location_match(text, location):
     text = text.lower()
     return any(k in text for k in LOCATIONS[location])
 
-# ================= PROCESS ONE RESUME =================
 def process_resume(file_path, skills, threshold, location, role):
     name = os.path.basename(file_path)
     cache_key = f"{name}_{role}_{location}_{threshold}.json"
@@ -117,7 +114,6 @@ def process_resume(file_path, skills, threshold, location, role):
     except Exception as e:
         return {"file": name, "status": "Rejected", "reason": str(e)}
 
-# ================= STREAMLIT UI =================
 st.set_page_config(layout="wide")
 st.title("🎯 Automated Resume Screening System")
 
@@ -133,7 +129,6 @@ with st.sidebar:
     threshold = st.slider("ATS Threshold", 1, 100, 70)
     start_btn = st.button("🚀 Fetch & Process")
 
-# ================= MAIN =================
 if start_btn:
     resumes = [
         os.path.join("resumes", f)
@@ -172,7 +167,7 @@ if start_btn:
 
     elapsed = (time.time() - start_time) / 60
 
-    # ================= METRICS =================
+  
     st.success(f"✅ Completed in {elapsed:.2f} minutes")
 
     c1, c2, c3 = st.columns(3)
@@ -180,7 +175,6 @@ if start_btn:
     c2.metric("Shortlisted", len(shortlisted))
     c3.metric("Rejected", len(rejected))
 
-    # ================= RESULTS =================
     st.subheader("✅ Shortlisted Candidates")
     if shortlisted:
         st.dataframe(shortlisted, use_container_width=True)

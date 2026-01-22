@@ -36,5 +36,9 @@ ROLE_REQUIREMENTS = {
     "Full Stack Developer": {
         "skills": ["html", "css", "javascript", "react", "node.js", "sql"],
         "threshold": 75
-    }
+    },
+    "HR Executive":{
+        "skills":["Screening","Onboarding","Document Verification","Email Management","Scheduling Meetings","Coordination","MIS preparation","records","communication","MS Office"],
+        "threshold": 60
+},
 }
