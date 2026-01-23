@@ -4,7 +4,7 @@ import json
 import base64
 import streamlit as st
 import pandas as pd
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from resume_parser.filereader import extract_text
 from config.settings import SUPPORTED_FILES
@@ -244,7 +244,7 @@ if start_btn:
 
     shortlisted, rejected = [], []
 
-    with ProcessPoolExecutor(MAX_WORKERS) as executor:
+    with ThreadPoolExecutor(MAX_WORKERS) as executor:
         futures = [
             executor.submit(process_resume, f, skills, threshold, location, role)
             for f in resumes
