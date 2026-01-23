@@ -24,16 +24,16 @@ ROLE_SKILLS = {
     "DevOps Engineer": ["docker", "kubernetes", "aws", "linux"],
     "AI Engineer": ["python", "machine learning", "tensorflow", "pytorch"],
     "Full Stack Developer": ["html", "css", "javascript", "react", "node", "sql"],
-<<<<<<< HEAD
+
     "HR Executive": [
         "screening", "onboarding", "document verification", "email management",
         "scheduling meetings", "coordination", "mis preparation", "records",
         "communication", "ms office"
     ]
-=======
+
     "HR Executive": [ "recruitment", "talent acquisition", "onboarding",
     "payroll", "employee engagement", "compliance", "hr analytics"]
->>>>>>> d87e1a81c9bec7b0dc78e2acc2b5e7422b0bf30f
+
 }
 
 LOCATIONS = {
