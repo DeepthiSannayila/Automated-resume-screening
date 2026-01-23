@@ -1,7 +1,9 @@
 import os
 import time
 import json
+import base64
 import streamlit as st
+import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from resume_parser.filereader import extract_text
@@ -14,7 +16,6 @@ MAX_FILE_SIZE_MB = 3
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-
 ROLE_SKILLS = {
     "Python Developer": ["python", "django", "flask", "fastapi", "sql", "git"],
     "Java Developer": ["java", "spring", "hibernate", "sql"],
@@ -23,10 +24,17 @@ ROLE_SKILLS = {
     "DevOps Engineer": ["docker", "kubernetes", "aws", "linux"],
     "AI Engineer": ["python", "machine learning", "tensorflow", "pytorch"],
     "Full Stack Developer": ["html", "css", "javascript", "react", "node", "sql"],
+<<<<<<< HEAD
+    "HR Executive": [
+        "screening", "onboarding", "document verification", "email management",
+        "scheduling meetings", "coordination", "mis preparation", "records",
+        "communication", "ms office"
+    ]
+=======
     "HR Executive": [ "recruitment", "talent acquisition", "onboarding",
     "payroll", "employee engagement", "compliance", "hr analytics"]
+>>>>>>> d87e1a81c9bec7b0dc78e2acc2b5e7422b0bf30f
 }
-
 
 LOCATIONS = {
     "Any": [],
@@ -37,6 +45,58 @@ LOCATIONS = {
     "Delhi": ["delhi"],
     "India": ["india"]
 }
+
+# ---------------- PDF VIEWER HELPER ----------------
+
+def show_pdf_base64(pdf_bytes):
+    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    pdf_display = f"""
+    <iframe
+        src="data:application/pdf;base64,{b64}"
+        width="100%"
+        height="800px"
+        style="border: none;">
+    </iframe>
+    """
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
+# ---------------- QUERY PARAM HANDLER ----------------
+
+params = st.query_params
+selected_resume = params.get("resume")
+
+if selected_resume:
+    full_path = None
+
+    for root, _, files in os.walk("resumes"):
+        if selected_resume in files:
+            full_path = os.path.join(root, selected_resume)
+            break
+
+    if full_path and os.path.exists(full_path):
+        with open(full_path, "rb") as f:
+            pdf_bytes = f.read()
+
+        st.set_page_config(layout="wide")
+        st.markdown("## 📄 Resume Viewer")
+
+        st.download_button(
+            "⬇️ Download Resume",
+            pdf_bytes,
+            file_name=selected_resume,
+            mime="application/pdf"
+        )
+
+        show_pdf_base64(pdf_bytes)
+
+        st.markdown("[⬅ Back to Results](./)")
+        st.stop()
+
+    else:
+        st.error("Resume file not found")
+        st.stop()
+
+# ---------------- CORE LOGIC ----------------
 
 def is_within_date_range(file_path, date_filter):
     if date_filter == "All":
@@ -54,6 +114,7 @@ def is_within_date_range(file_path, date_filter):
 
     return True
 
+
 def skill_match(text, skills):
     text = text.lower()
     found = [s for s in skills if s in text]
@@ -61,11 +122,13 @@ def skill_match(text, skills):
     score = int((len(found) / len(skills)) * 100)
     return score, found, missing
 
+
 def location_match(text, location):
     if location == "Any":
         return True
     text = text.lower()
     return any(k in text for k in LOCATIONS[location])
+
 
 def process_resume(file_path, skills, threshold, location, role):
     name = os.path.basename(file_path)
@@ -77,16 +140,31 @@ def process_resume(file_path, skills, threshold, location, role):
             return json.load(f)
 
     if os.path.getsize(file_path) > MAX_FILE_SIZE_MB * 1024 * 1024:
-        return {"file": name, "status": "Rejected", "reason": "File too large"}
+        return {
+            "file": name,
+            "file_path": file_path,
+            "status": "Rejected",
+            "reason": "File too large"
+        }
 
     try:
         text = extract_text(file_path)[:MAX_TEXT_CHARS]
 
         if not text or len(text) < 200:
-            result = {"file": name, "status": "Rejected", "reason": "Unreadable resume"}
+            result = {
+                "file": name,
+                "file_path": file_path,
+                "status": "Rejected",
+                "reason": "Unreadable resume"
+            }
 
         elif not location_match(text, location):
-            result = {"file": name, "status": "Rejected", "reason": "Location mismatch"}
+            result = {
+                "file": name,
+                "file_path": file_path,
+                "status": "Rejected",
+                "reason": "Location mismatch"
+            }
 
         else:
             score, found, missing = skill_match(text, skills)
@@ -94,6 +172,7 @@ def process_resume(file_path, skills, threshold, location, role):
             if score < threshold:
                 result = {
                     "file": name,
+                    "file_path": file_path,
                     "status": "Rejected",
                     "score": score,
                     "reason": "ATS below threshold",
@@ -102,6 +181,7 @@ def process_resume(file_path, skills, threshold, location, role):
             else:
                 result = {
                     "file": name,
+                    "file_path": file_path,
                     "status": "Shortlisted",
                     "score": score,
                     "skills_found": ", ".join(found)
@@ -113,7 +193,14 @@ def process_resume(file_path, skills, threshold, location, role):
         return result
 
     except Exception as e:
-        return {"file": name, "status": "Rejected", "reason": str(e)}
+        return {
+            "file": name,
+            "file_path": file_path,
+            "status": "Rejected",
+            "reason": str(e)
+        }
+
+# ---------------- UI ----------------
 
 st.set_page_config(layout="wide")
 st.title("🎯 Automated Resume Screening System")
@@ -129,6 +216,15 @@ with st.sidebar:
     max_apps = st.slider("Applications", 100, 5000, 2000)
     threshold = st.slider("ATS Threshold", 1, 100, 70)
     start_btn = st.button("🚀 Fetch & Process")
+
+
+def make_clickable(df):
+    df = df.copy()
+    df["Resume"] = df["file"].apply(
+        lambda f: f'<a href="?resume={f}">{f}</a>'
+    )
+    return df.drop(columns=["file", "file_path"], errors="ignore")
+
 
 if start_btn:
     resumes = [
@@ -168,7 +264,6 @@ if start_btn:
 
     elapsed = (time.time() - start_time) / 60
 
-  
     st.success(f"✅ Completed in {elapsed:.2f} minutes")
 
     c1, c2, c3 = st.columns(3)
@@ -178,9 +273,16 @@ if start_btn:
 
     st.subheader("✅ Shortlisted Candidates")
     if shortlisted:
-        st.dataframe(shortlisted, use_container_width=True)
+        short_df = pd.DataFrame(shortlisted)
+        short_df = make_clickable(short_df)
+        st.markdown(short_df.to_html(escape=False), unsafe_allow_html=True)
     else:
         st.info("No shortlisted candidates")
 
     st.subheader("❌ Rejected Candidates (with reasons)")
-    st.dataframe(rejected, use_container_width=True)
+    if rejected:
+        rej_df = pd.DataFrame(rejected)
+        rej_df = make_clickable(rej_df)
+        st.markdown(rej_df.to_html(escape=False), unsafe_allow_html=True)
+    else:
+        st.info("No rejected candidates")
