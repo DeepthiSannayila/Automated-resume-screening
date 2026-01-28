@@ -28,7 +28,7 @@ ROLE_SKILLS = {
     "HR Executive": [
         "screening", "onboarding", "document verification", "email management",
         "scheduling meetings", "coordination", "mis preparation", 
-        "communication", "ms office" "recruitment", "talent acquisition", "onboarding",
+        "communication", "recruitment", "talent acquisition", "onboarding",
     "employee engagement", "compliance", "hr analytics"
     ],
 
